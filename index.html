@@ -22,7 +22,7 @@ h1{font-size:24px;margin:0 0 8px}
 table{width:100%;border-collapse:collapse;min-width:1250px}
 th,td{border:1px solid #ddd;padding:8px;font-size:13px;text-align:left}
 th{background:#f3f4f6}
-.copy{padding:5px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;cursor:pointer}
+.copy{padding:6px 10px;border:1px solid #bbb;border-radius:5px;background:#fff;cursor:pointer;font-weight:600}.copy-btn{min-width:52px}.copy-btn:hover{background:#f5f9ff}.copy-btn.copied{background:#eaf7ea}
 .copyable{cursor:pointer;position:relative}
 .copyable:hover{background:#f5f9ff}
 .copyable.copied{background:#eaf7ea}
@@ -32,7 +32,7 @@ th{background:#f3f4f6}
 @media print{
   body{background:#fff}
   main{max-width:none;margin:0;padding:0}
-  .card,#status,#pdfBtn,.copy,.copy-ui{display:none!important}
+  .card,#status,#pdfBtn,#shareBtn,.copy,.copy-ui{display:none!important}
   .wrap{overflow:visible}
   table{min-width:0;width:100%;font-size:9px}
   th,td{font-size:9px;padding:4px;white-space:normal}
@@ -60,7 +60,7 @@ th{background:#f3f4f6}
 
   <section class="card">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap"><div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="pdfBtn" class="copy" type="button">一覧をPDF保存</button></div>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap"><div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="pdfBtn" class="copy" type="button">一覧をPDF保存</button><button id="shareBtn" class="copy" type="button">結果を共有</button></div>
       
     </div>
     <div class="wrap">
@@ -676,15 +676,15 @@ function render(){
   tbody.innerHTML=hits.map((r,i)=>`
     <tr>
       <td>${i+1}</td>
-      <td class="copyable" data-i="${i}" data-field="id" title="クリックでコピー">${esc(r.id)}</td>
-      <td class="copy-ui"><span>クリック</span></td>
+      <td>${esc(r.id)}</td>
+      <td class="copy-ui"><button class="copy copy-btn" type="button" data-i="${i}" data-field="id">コピー</button></td>
       <td>${esc(r.photo)}枚</td>
-      <td class="copyable" data-i="${i}" data-field="name" title="クリックでコピー">${esc(r.name)}</td>
-      <td class="copy-ui"><span>クリック</span></td>
+      <td>${esc(r.name)}</td>
+      <td class="copy-ui"><button class="copy copy-btn" type="button" data-i="${i}" data-field="name">コピー</button></td>
       <td>${esc(r.room)}</td>
       <td>${esc(r.agent)}</td>
-      <td class="copyable" data-i="${i}" data-field="address" title="クリックでコピー">${esc(r.address)}</td>
-      <td class="copy-ui"><span>クリック</span></td>
+      <td>${esc(r.address)}</td>
+      <td class="copy-ui"><button class="copy copy-btn" type="button" data-i="${i}" data-field="address">コピー</button></td>
       <td>${esc(r.adkey)}</td>
       <td>${esc(r.dateText)}</td>
     </tr>`).join('');
@@ -727,27 +727,197 @@ async function copyText(text){
 }
 
 tbody.addEventListener('click',async e=>{
-  const b=e.target.closest('.copyable');if(!b)return;
+  const b=e.target.closest('.copy-btn');
+  if(!b)return;
+
   const r=hits[Number(b.dataset.i)];
   const field=b.dataset.field;
   const text=field==='id' ? r.id : field==='name' ? r.name : r.address;
+
   const ok=await copyText(text);
-  const original=b.textContent;
-  b.classList.toggle('copied',ok);
+  const original='コピー';
   if(ok){
-    b.textContent='コピーしました';
-    setTimeout(()=>{b.textContent=original;b.classList.remove('copied')},900);
+    b.textContent='コピー済み';
+    b.classList.add('copied');
+    setTimeout(()=>{
+      b.textContent=original;
+      b.classList.remove('copied');
+    },900);
   }else{
-    status('コピーに失敗しました。もう一度クリックしてください。');
+    b.textContent='再試行';
+    status('コピーに失敗しました。ブラウザの権限を確認して、もう一度押してください。');
+    setTimeout(()=>{b.textContent=original},1200);
   }
 });
+
+
+// ===== 結果共有 =====
+// GitHub Pagesで公開したページ自身のURLを土台にして、
+// 判定結果をURLの #share= に圧縮保存します。
+// 共有先はPDF不要で、このURLを開くだけで結果を復元します。
+
+const shareBtn=document.getElementById('shareBtn');
+
+function shareData(){
+  return {
+    v:1,
+    cutoff:getCutoff().label,
+    hits:hits.map(r=>({
+      id:String(r.id||''),
+      photo:Number(r.photo||0),
+      name:String(r.name||''),
+      room:String(r.room||''),
+      agent:String(r.agent||''),
+      address:String(r.address||''),
+      adkey:String(r.adkey||''),
+      dateText:String(r.dateText||'')
+    }))
+  };
+}
+
+function bytesToBase64Url(bytes){
+  let bin='';
+  const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    bin+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+  }
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+function base64UrlToBytes(str){
+  let s=str.replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length%4)s+='=';
+  const bin=atob(s);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return bytes;
+}
+
+async function encodeShare(obj){
+  const raw=new TextEncoder().encode(JSON.stringify(obj));
+
+  if('CompressionStream' in window){
+    try{
+      const cs=new CompressionStream('deflate-raw');
+      const compressed=new Uint8Array(
+        await new Response(new Blob([raw]).stream().pipeThrough(cs)).arrayBuffer()
+      );
+      return 'd'+bytesToBase64Url(compressed);
+    }catch(e){}
+  }
+
+  return 'j'+bytesToBase64Url(raw);
+}
+
+async function decodeShare(str){
+  try{
+    const type=str.charAt(0);
+    const bytes=base64UrlToBytes(str.slice(1));
+
+    if(type==='d' && 'DecompressionStream' in window){
+      const ds=new DecompressionStream('deflate-raw');
+      const raw=new Uint8Array(
+        await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer()
+      );
+      return JSON.parse(new TextDecoder().decode(raw));
+    }
+
+    if(type==='j'){
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+  }catch(e){
+    console.error('共有結果の復元に失敗',e);
+  }
+  return null;
+}
+
+function getShareHash(){
+  const h=location.hash||'';
+  if(!h.startsWith('#share='))return '';
+  return decodeURIComponent(h.slice(7));
+}
+
+async function restoreSharedResult(){
+  const encoded=getShareHash();
+  if(!encoded)return false;
+
+  const data=await decodeShare(encoded);
+  if(!data || !Array.isArray(data.hits))return false;
+
+  hits=data.hits.map(r=>({
+    id:r.id||'',
+    photo:Number(r.photo||0),
+    name:r.name||'',
+    room:r.room||'',
+    agent:r.agent||'',
+    address:r.address||'',
+    adkey:r.adkey||'',
+    dateText:r.dateText||''
+  }));
+
+  sortByAddress(false);
+
+  drop.style.display='none';
+  fileEl.disabled=true;
+  shareBtn.textContent='共有結果を表示中';
+
+  status(
+    `共有結果を読み込みました\n`+
+    `抽出：${hits.length.toLocaleString()}件\n`+
+    `基準：${data.cutoff||getCutoff().label}\n`+
+    `この画面はPDFなしで共有結果を表示しています。`
+  );
+
+  return true;
+}
+
+shareBtn.addEventListener('click',async()=>{
+  if(!hits.length){
+    status('共有する結果がありません。先にPDFを読み込んでください。');
+    return;
+  }
+
+  try{
+    const encoded=await encodeShare(shareData());
+
+    // 現在のGitHub Pages URLをそのまま土台にする。
+    // 例：https://xxxxx.github.io/repo/
+    //        ↓
+    // https://xxxxx.github.io/repo/#share=xxxxx
+    const url=new URL(window.location.href);
+    url.hash='share='+encodeURIComponent(encoded);
+
+    const shareUrl=url.toString();
+    const ok=await copyText(shareUrl);
+
+    if(ok){
+      shareBtn.textContent='URLをコピーしました';
+      status(
+        `共有URLをコピーしました\n`+
+        `このURLをLINE等で送れば、PDFなしで同じ結果を表示できます。`
+      );
+      setTimeout(()=>shareBtn.textContent='結果を共有',1800);
+    }else{
+      // クリップボードが使えない環境でもURL自体は表示。
+      window.prompt('このURLをコピーしてください',shareUrl);
+    }
+  }catch(e){
+    console.error(e);
+    status('共有URLの作成に失敗しました。');
+  }
+});
+
 
 fileEl.addEventListener('change',()=>readFiles(fileEl.files));
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));
 drop.addEventListener('drop',e=>readFiles(e.dataTransfer.files));
 
-init();render();
+render();
+(async()=>{
+  const restored=await restoreSharedResult();
+  if(!restored) await init();
+})();
 </script>
 </body>
 </html>
