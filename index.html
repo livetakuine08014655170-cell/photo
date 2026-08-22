@@ -19,8 +19,11 @@ h1{font-size:24px;margin:0 0 8px}
 #status{margin-top:12px;padding:10px;background:#f7f8fa;border-radius:6px;font-size:14px;white-space:pre-wrap}
 .count{font-weight:700;margin-bottom:10px}
 .wrap{overflow:auto}
-table{width:100%;border-collapse:collapse;min-width:1250px}
-th,td{border:1px solid #ddd;padding:8px;font-size:13px;text-align:left}
+table{width:100%;border-collapse:collapse;min-width:1450px;table-layout:auto}
+th,td{border:1px solid #ddd;padding:8px;font-size:13px;text-align:left;vertical-align:top}
+th:nth-child(8),td:nth-child(8){min-width:260px;white-space:normal;word-break:break-word}
+th:nth-child(9),td:nth-child(9){min-width:240px;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+th:nth-child(11),td:nth-child(11){min-width:220px;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 th{background:#f3f4f6}
 .copy{padding:6px 10px;border:1px solid #bbb;border-radius:5px;background:#fff;cursor:pointer;font-weight:600}.copy-btn{min-width:52px}.copy-btn:hover{background:#f5f9ff}.copy-btn.copied{background:#eaf7ea}
 .copyable{cursor:pointer;position:relative}
@@ -28,7 +31,7 @@ th{background:#f3f4f6}
 .copyable.copied{background:#eaf7ea}
 .copyable::after{content:"クリックでコピー";display:none;position:absolute;left:6px;top:100%;z-index:5;background:#333;color:#fff;padding:3px 6px;border-radius:4px;font-size:11px;white-space:nowrap}
 .copyable:hover::after{display:block}
-.share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n
+.key-location{white-space:normal!important;word-break:break-word;overflow-wrap:anywhere;max-width:360px}\n.share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n
 @media print{
   body{background:#fff}
   main{max-width:none;margin:0;padding:0}
@@ -685,7 +688,7 @@ function render(){
       <td>${esc(r.agent)}</td>
       <td>${esc(r.address)}</td>
       <td class="copy-ui"><button class="copy copy-btn" type="button" data-i="${i}" data-field="address">コピー</button></td>
-      <td>${esc(r.adkey)}</td>
+      <td class="key-location">${esc(r.adkey)}</td>
       <td>${esc(r.dateText)}</td>
     </tr>`).join('');
 }
