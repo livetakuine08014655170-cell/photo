@@ -23,11 +23,16 @@ table{width:100%;border-collapse:collapse;min-width:1250px}
 th,td{border:1px solid #ddd;padding:8px;font-size:13px;text-align:left}
 th{background:#f3f4f6}
 .copy{padding:5px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;cursor:pointer}
+.copyable{cursor:pointer;position:relative}
+.copyable:hover{background:#f5f9ff}
+.copyable.copied{background:#eaf7ea}
+.copyable::after{content:"クリックでコピー";display:none;position:absolute;left:6px;top:100%;z-index:5;background:#333;color:#fff;padding:3px 6px;border-radius:4px;font-size:11px;white-space:nowrap}
+.copyable:hover::after{display:block}
 .share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n
 @media print{
   body{background:#fff}
   main{max-width:none;margin:0;padding:0}
-  .card,#status,#pdfBtn,.copy{display:none!important}
+  .card,#status,#pdfBtn,.copy,.copy-ui{display:none!important}
   .wrap{overflow:visible}
   table{min-width:0;width:100%;font-size:9px}
   th,td{font-size:9px;padding:4px;white-space:normal}
@@ -671,15 +676,15 @@ function render(){
   tbody.innerHTML=hits.map((r,i)=>`
     <tr>
       <td>${i+1}</td>
-      <td>${esc(r.id)}</td>
-      <td><button class="copy" data-i="${i}" data-field="id">コピー</button></td>
+      <td class="copyable" data-i="${i}" data-field="id" title="クリックでコピー">${esc(r.id)}</td>
+      <td class="copy-ui"><span>クリック</span></td>
       <td>${esc(r.photo)}枚</td>
-      <td>${esc(r.name)}</td>
-      <td><button class="copy" data-i="${i}" data-field="name">コピー</button></td>
+      <td class="copyable" data-i="${i}" data-field="name" title="クリックでコピー">${esc(r.name)}</td>
+      <td class="copy-ui"><span>クリック</span></td>
       <td>${esc(r.room)}</td>
       <td>${esc(r.agent)}</td>
-      <td>${esc(r.address)}</td>
-      <td><button class="copy" data-i="${i}" data-field="address">コピー</button></td>
+      <td class="copyable" data-i="${i}" data-field="address" title="クリックでコピー">${esc(r.address)}</td>
+      <td class="copy-ui"><span>クリック</span></td>
       <td>${esc(r.adkey)}</td>
       <td>${esc(r.dateText)}</td>
     </tr>`).join('');
@@ -696,14 +701,45 @@ pdfBtn.addEventListener('click',()=>{
   window.print();
 });
 
+async function copyText(text){
+  text=String(text||'');
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.position='fixed';
+    ta.style.left='-9999px';
+    ta.style.top='0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0,ta.value.length);
+    const ok=document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }catch(e){return false;}
+}
+
 tbody.addEventListener('click',async e=>{
-  const b=e.target.closest('.copy');if(!b)return;
+  const b=e.target.closest('.copyable');if(!b)return;
   const r=hits[Number(b.dataset.i)];
   const field=b.dataset.field;
   const text=field==='id' ? r.id : field==='name' ? r.name : r.address;
-  await navigator.clipboard.writeText(String(text||''));
-  b.textContent='コピーしました';
-  setTimeout(()=>b.textContent='コピー',900);
+  const ok=await copyText(text);
+  const original=b.textContent;
+  b.classList.toggle('copied',ok);
+  if(ok){
+    b.textContent='コピーしました';
+    setTimeout(()=>{b.textContent=original;b.classList.remove('copied')},900);
+  }else{
+    status('コピーに失敗しました。もう一度クリックしてください。');
+  }
 });
 
 fileEl.addEventListener('change',()=>readFiles(fileEl.files));
