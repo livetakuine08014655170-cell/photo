@@ -874,6 +874,40 @@ async function restoreSharedResult(){
   return true;
 }
 
+
+function shortenWithIsGd(longUrl){
+  return new Promise((resolve)=>{
+    const cb='mioShort_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>{
+      cleanup();
+      resolve(null);
+    },10000);
+
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cb];
+      script.remove();
+    }
+
+    window[cb]=(data)=>{
+      const short=data && data.shorturl;
+      cleanup();
+      resolve(short && /^https:\/\/is\.gd\//.test(short) ? short : null);
+    };
+
+    script.onerror=()=>{
+      cleanup();
+      resolve(null);
+    };
+
+    script.src='https://is.gd/create.php?format=json&callback='+
+      encodeURIComponent(cb)+'&url='+encodeURIComponent(longUrl);
+
+    document.head.appendChild(script);
+  });
+}
+
 shareBtn.addEventListener('click',async()=>{
   if(!hits.length){
     status('共有する結果がありません。先にPDFを読み込んでください。');
@@ -890,19 +924,37 @@ shareBtn.addEventListener('click',async()=>{
     const url=new URL(window.location.href);
     url.hash='share='+encodeURIComponent(encoded);
 
-    const shareUrl=url.toString();
-    const ok=await copyText(shareUrl);
+    const longShareUrl=url.toString();
 
-    if(ok){
-      shareBtn.textContent='URLをコピーしました';
-      status(
-        `共有URLをコピーしました\n`+
-        `このURLをLINE等で送れば、PDFなしで同じ結果を表示できます。`
-      );
-      setTimeout(()=>shareBtn.textContent='結果を共有',1800);
+    // is.gd のJSONP APIを使って短縮。
+    // fetch/CORSに依存せず、LINEで扱いやすい短いURLを作る。
+    const shortUrl=await shortenWithIsGd(longShareUrl);
+
+    if(shortUrl){
+      const ok=await copyText(shortUrl);
+      if(ok){
+        shareBtn.textContent='短縮URLをコピーしました';
+        status(
+          `短縮URLをコピーしました\n`+
+          `このURLをLINE等で送れば、PDFなしで同じ結果を表示できます。`
+        );
+        setTimeout(()=>shareBtn.textContent='結果を共有',1800);
+      }else{
+        window.prompt('この短縮URLをコピーしてください',shortUrl);
+      }
     }else{
-      // クリップボードが使えない環境でもURL自体は表示。
-      window.prompt('このURLをコピーしてください',shareUrl);
+      // 短縮サービスが利用できない場合は元URLをコピー。
+      const ok=await copyText(longShareUrl);
+      if(ok){
+        shareBtn.textContent='長いURLをコピーしました';
+        status(
+          `URL短縮サービスに接続できなかったため、元の共有URLをコピーしました。\\n`+
+          `LINEで開けない場合はもう一度お試しください。`
+        );
+        setTimeout(()=>shareBtn.textContent='結果を共有',1800);
+      }else{
+        window.prompt('このURLをコピーしてください',longShareUrl);
+      }
     }
   }catch(e){
     console.error(e);
