@@ -23,7 +23,21 @@ table{width:100%;border-collapse:collapse;min-width:1250px}
 th,td{border:1px solid #ddd;padding:8px;font-size:13px;text-align:left}
 th{background:#f3f4f6}
 .copy{padding:5px 8px;border:1px solid #bbb;border-radius:5px;background:#fff;cursor:pointer}
-.share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n</style>
+.share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n
+@media print{
+  body{background:#fff}
+  main{max-width:none;margin:0;padding:0}
+  .card,#status,#pdfBtn,.copy{display:none!important}
+  .wrap{overflow:visible}
+  table{min-width:0;width:100%;font-size:9px}
+  th,td{font-size:9px;padding:4px;white-space:normal}
+  th:nth-child(3),td:nth-child(3),th:nth-child(6),td:nth-child(6),th:nth-child(10),td:nth-child(10){display:none}
+  h1{font-size:18px;margin-bottom:6px}
+  .note{font-size:10px}
+  .count{font-size:12px;margin-bottom:8px}
+  @page{size:A4 landscape;margin:8mm}
+}
+</style>
 </head>
 <body>
 <main>
@@ -41,7 +55,7 @@ th{background:#f3f4f6}
 
   <section class="card">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-      <div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="shareBtn" class="copy" type="button" style="margin-left:auto">結果を共有</button>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap"><div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="pdfBtn" class="copy" type="button">一覧をPDF保存</button></div>
       
     </div>
     <div class="wrap">
@@ -625,11 +639,11 @@ function addressPartsForSort(addr){
 
 function sortByAddress(showMessage=true){
   hits.sort((a,b)=>{
-    const A=addressPartsForSort(a.addr);
-    const B=addressPartsForSort(b.addr);
+    const A=addressPartsForSort(a.address);
+    const B=addressPartsForSort(b.address);
 
     // ① 市を指定順で完全に固める
-    const cityDiff=cityRank(a.addr)-cityRank(b.addr);
+    const cityDiff=cityRank(a.address)-cityRank(b.address);
     if(cityDiff!==0)return cityDiff;
 
     // ② 同じ市の中で町名ごとに固める
@@ -672,140 +686,15 @@ function render(){
 }
 
 
-// ===== 共有機能 =====
-// GitHub Pages等の通常のhttps URLで動くよう、結果データをURLの#share=に保存。
-// # はサーバーへ送られないため、ページ側だけで復元できます。
-// URLが長くなりすぎる場合に備え、圧縮可能なら CompressionStream を使います。
-
-const shareBtn=document.getElementById('shareBtn');
-
-function sharePayload(){
-  return {
-    v:1,
-    cutoff:getCutoff().label,
-    hits:hits.map(r=>({
-      id:r.id||'',
-      photo:Number(r.photo||0),
-      name:r.name||'',
-      room:r.room||'',
-      agent:r.agent||'',
-      address:r.address||'',
-      adkey:r.adkey||'',
-      dateText:r.dateText||''
-    }))
-  };
-}
-
-function bytesToBase64Url(bytes){
-  let bin='';
-  const chunk=0x8000;
-  for(let i=0;i<bytes.length;i+=chunk){
-    bin+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-  }
-  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-
-function base64UrlToBytes(s){
-  s=s.replace(/-/g,'+').replace(/_/g,'/');
-  while(s.length%4)s+='=';
-  const bin=atob(s);
-  const out=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);
-  return out;
-}
-
-async function encodeShareData(obj){
-  const raw=new TextEncoder().encode(JSON.stringify(obj));
-  if('CompressionStream' in window){
-    try{
-      const cs=new CompressionStream('deflate-raw');
-      const compressed=new Uint8Array(await new Response(
-        new Blob([raw]).stream().pipeThrough(cs)
-      ).arrayBuffer());
-      return 'd'+bytesToBase64Url(compressed);
-    }catch(e){}
-  }
-  return 'j'+bytesToBase64Url(raw);
-}
-
-async function decodeShareData(s){
-  if(!s)return null;
-  try{
-    const type=s[0], bytes=base64UrlToBytes(s.slice(1));
-    if(type==='d' && 'DecompressionStream' in window){
-      const ds=new DecompressionStream('deflate-raw');
-      const raw=new Uint8Array(await new Response(
-        new Blob([bytes]).stream().pipeThrough(ds)
-      ).arrayBuffer());
-      return JSON.parse(new TextDecoder().decode(raw));
-    }
-    if(type==='j'){
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-  }catch(e){
-    console.error('共有データ復元エラー',e);
-  }
-  return null;
-}
-
-function getShareString(){
-  const h=location.hash||'';
-  return h.startsWith('#share=') ? decodeURIComponent(h.slice(7)) : '';
-}
-
-async function restoreSharedResult(){
-  const s=getShareString();
-  if(!s)return false;
-  const data=await decodeShareData(s);
-  if(!data || !Array.isArray(data.hits))return false;
-
-  hits=data.hits.map((r,i)=>({...r,__originalOrder:i}));
-  sortByAddress(false);
-
-  status(
-    `共有結果を読み込みました\\n`+
-    `抽出：${hits.length.toLocaleString()}件\\n`+
-    `基準：${data.cutoff||getCutoff().label}`
-  );
-  return true;
-}
-
-shareBtn.addEventListener('click',async()=>{
+// ===== PDF出力 =====
+const pdfBtn=document.getElementById('pdfBtn');
+pdfBtn.addEventListener('click',()=>{
   if(!hits.length){
-    status('共有する結果がありません。先にPDFを読み込んでください。');
+    status('PDF保存する結果がありません。先にPDFを読み込んでください。');
     return;
   }
-
-  try{
-    const encoded=await encodeShareData(sharePayload());
-    const url=new URL(location.href);
-    url.hash='share='+encodeURIComponent(encoded);
-
-    // GitHub Pagesの実URLをそのまま使用。
-    // 既存のshareハッシュは上書き。
-    const shareUrl=url.toString();
-
-    await navigator.clipboard.writeText(shareUrl);
-    shareBtn.textContent='URLをコピーしました';
-    status(
-      `共有URLをコピーしました。\\n`+
-      `このURLをLINE等で送れば、PDFなしで同じ結果を開けます。`
-    );
-    setTimeout(()=>shareBtn.textContent='結果を共有',1800);
-  }catch(e){
-    console.error(e);
-    status('共有URLの作成に失敗しました：'+(e?.message||String(e)));
-  }
+  window.print();
 });
-
-// URLを開いた時はPDFを要求せず、自動で結果を復元。
-(async()=>{
-  const restored=await restoreSharedResult();
-  if(restored){
-    drop.style.display='none';
-    fileEl.disabled=true;
-  }
-})();
 
 tbody.addEventListener('click',async e=>{
   const b=e.target.closest('.copy');if(!b)return;
