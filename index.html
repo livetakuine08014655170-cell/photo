@@ -169,6 +169,11 @@ th{background:#f3f4f6}
 }
 
 
+
+.sort-active{background:#eef5ff!important;border-color:#8fb5e8!important}
+@media screen and (max-width:700px){
+  #sortBtn{font-size:12px!important;padding:6px 8px!important}
+}
 /* ===== スマホ共有カード：最終レイアウト ===== */
 .mobile-list{display:none}
 
@@ -332,7 +337,7 @@ th{background:#f3f4f6}
 
   <section class="card">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap"><div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="pdfBtn" class="copy" type="button">一覧をPDF保存</button><button id="shareBtn" class="copy" type="button">結果を共有</button></div>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap"><div class="count" id="count" style="margin-bottom:0">抽出 0件</div><button id="pdfBtn" class="copy" type="button">一覧をPDF保存</button><button id="sortBtn" class="copy" type="button">住所順</button><button id="shareBtn" class="copy" type="button">結果を共有</button></div>
       
     </div>
     <div class="wrap">
@@ -937,14 +942,30 @@ function sortByAddress(showMessage=true){
     return String(a.id||'').localeCompare(String(b.id||''),'ja',{numeric:true});
   });
 
-  render();
+  if(!window.__sortingForRender){
+    window.__sortingForRender=true;
+    render();
+    window.__sortingForRender=false;
+  }
 
   if(showMessage){
     status(`並び替え完了：宝塚市 → 伊丹市 → 西宮市 → 川西市\n各市の中は町名ごと → 丁目 → 番地順\n抽出：${hits.length}件\n基準：${getCutoff().label}`);
   }
 }
 
+
+const sortBtn=document.getElementById('sortBtn');
+if(sortBtn){
+  sortBtn.addEventListener('click',()=>{
+    sortByAddress(false);
+    sortBtn.textContent='住所順✓';
+    sortBtn.classList.add('sort-active');
+    status(`住所順に並び替えました\n宝塚市 → 伊丹市 → 西宮市 → 川西市\n各市の中：町名 → 丁目 → 番地 → 号\n抽出：${hits.length.toLocaleString()}件`);
+  });
+}
+
 function render(){
+  if(hits.length && !window.__sortingForRender) sortByAddress(false);
   countEl.textContent=`抽出 ${hits.length.toLocaleString()}件`;
 
   let tableHtml='';
