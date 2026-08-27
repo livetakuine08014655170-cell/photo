@@ -32,6 +32,92 @@ th{background:#f3f4f6}
 .copyable::after{content:"クリックでコピー";display:none;position:absolute;left:6px;top:100%;z-index:5;background:#333;color:#fff;padding:3px 6px;border-radius:4px;font-size:11px;white-space:nowrap}
 .copyable:hover::after{display:block}
 .key-location{white-space:normal!important;word-break:break-word;overflow-wrap:anywhere;max-width:360px}\n.share-note{margin:8px 0 0;color:#555;font-size:13px;white-space:pre-wrap}\n
+
+@media (max-width:700px){
+  body{background:#f4f5f7}
+  main{margin:10px auto;padding:0 8px;max-width:100%}
+  h1{font-size:19px;line-height:1.35;margin-bottom:6px}
+  .note{font-size:12px;line-height:1.5;margin-bottom:10px}
+  .card{padding:10px;border-radius:10px;margin-bottom:10px}
+  #status{font-size:12px;line-height:1.5;padding:9px}
+  .drop{padding:24px 10px}
+  .drop b{font-size:16px}
+  .drop small{font-size:11px}
+
+  .wrap{overflow:visible}
+  table{display:block;width:100%;min-width:0;border:0}
+  thead{display:none}
+  tbody{display:block}
+  tbody tr{
+    display:block;
+    background:#fff;
+    border:1px solid #ddd;
+    border-radius:10px;
+    margin:0 0 10px;
+    padding:8px 10px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  tbody td{
+    display:grid;
+    grid-template-columns:92px minmax(0,1fr);
+    gap:8px;
+    width:100%;
+    min-width:0!important;
+    max-width:none!important;
+    border:0;
+    border-bottom:1px solid #eee;
+    padding:7px 0;
+    font-size:13px;
+    line-height:1.45;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  tbody td:last-child{border-bottom:0}
+  tbody td:nth-child(1)::before{content:"No."}
+  tbody td:nth-child(2)::before{content:"管理番号"}
+  tbody td:nth-child(3)::before{content:"管理番号コピー"}
+  tbody td:nth-child(4)::before{content:"写真枚数"}
+  tbody td:nth-child(5)::before{content:"物件名"}
+  tbody td:nth-child(6)::before{content:"物件名コピー"}
+  tbody td:nth-child(7)::before{content:"号室"}
+  tbody td:nth-child(8)::before{content:"元付業者・電話"}
+  tbody td:nth-child(9)::before{content:"所在地"}
+  tbody td:nth-child(10)::before{content:"住所コピー"}
+  tbody td:nth-child(11)::before{content:"鍵所在"}
+  tbody td:nth-child(12)::before{content:"入居日"}
+  tbody td::before{
+    font-weight:700;
+    color:#666;
+    min-width:0;
+  }
+  tbody td:nth-child(1){font-weight:700}
+  tbody td:nth-child(2){font-weight:700}
+  tbody td:nth-child(5){font-size:14px;font-weight:700}
+  tbody td:nth-child(9){font-size:13px}
+  tbody td:nth-child(11){
+    background:#fafafa;
+    border-radius:6px;
+    padding-left:6px;
+    padding-right:6px;
+  }
+  .copy-ui{display:grid!important}
+  .copy-btn{
+    width:100%;
+    min-width:0;
+    padding:7px 10px;
+    font-size:12px;
+  }
+
+  /* On shared-result mobile view, make the result header compact. */
+  main > .card:nth-of-type(2) > div:first-child{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:#fff;
+    padding:4px 0 8px;
+  }
+}
+
 @media print{
   body{background:#fff}
   main{max-width:none;margin:0;padding:0}
@@ -756,6 +842,7 @@ tbody.addEventListener('click',async e=>{
 
 // ===== 結果共有（Googleスプレッドシート＋Apps Script） =====
 const GAS_URL='https://script.google.com/macros/s/AKfycbwG_AxQzjHGbCJncX_7hGgwdKFD0Ft4_Icf6bCx-GNcl_9a5sl9T6VMC3_KKvopWTJQ/exec';
+const SHARE_API='https://script.google.com/macros/s/AKfycbwG_AxQzjHGbCJncX_7hGgwdKFD0Ft4_Icf6bCx-GNcl_9a5sl9T6VMC3_KKvopWTJQ/exec';
 const shareBtn=document.getElementById('shareBtn');
 
 function shareData(){return {v:1,cutoff:getCutoff().label,hits:hits.map(r=>({id:String(r.id||''),photo:Number(r.photo||0),name:String(r.name||''),room:String(r.room||''),agent:String(r.agent||''),address:String(r.address||''),adkey:String(r.adkey||''),dateText:String(r.dateText||'')}))};}
