@@ -754,214 +754,79 @@ tbody.addEventListener('click',async e=>{
 });
 
 
-// ===== 結果共有 =====
-// GitHub Pagesで公開したページ自身のURLを土台にして、
-// 判定結果をURLの #share= に圧縮保存します。
-// 共有先はPDF不要で、このURLを開くだけで結果を復元します。
-
+// ===== 結果共有（Googleスプレッドシート＋Apps Script） =====
+const GAS_URL='https://script.google.com/macros/s/AKfycbwG_AxQzjHGbCJncX_7hGgwdKFD0Ft4_Icf6bCx-GNcl_9a5sl9T6VMC3_KKvopWTJQ/exec';
 const shareBtn=document.getElementById('shareBtn');
 
-function shareData(){
-  return {
-    v:1,
-    cutoff:getCutoff().label,
-    hits:hits.map(r=>({
-      id:String(r.id||''),
-      photo:Number(r.photo||0),
-      name:String(r.name||''),
-      room:String(r.room||''),
-      agent:String(r.agent||''),
-      address:String(r.address||''),
-      adkey:String(r.adkey||''),
-      dateText:String(r.dateText||'')
-    }))
-  };
+function shareData(){return {v:1,cutoff:getCutoff().label,hits:hits.map(r=>({id:String(r.id||''),photo:Number(r.photo||0),name:String(r.name||''),room:String(r.room||''),agent:String(r.agent||''),address:String(r.address||''),adkey:String(r.adkey||''),dateText:String(r.dateText||'')}))};}
+
+function makeShareId(){
+  const a=new Uint8Array(9);
+  crypto.getRandomValues(a);
+  return Array.from(a,b=>b.toString(36).padStart(2,'0')).join('').slice(0,12);
 }
 
-function bytesToBase64Url(bytes){
-  let bin='';
-  const chunk=0x8000;
-  for(let i=0;i<bytes.length;i+=chunk){
-    bin+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
-  }
-  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function saveToGAS(id,data){
+  const body=new URLSearchParams();
+  body.set('id',id);
+  body.set('data',JSON.stringify(data));
+  await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString()});
 }
 
-function base64UrlToBytes(str){
-  let s=str.replace(/-/g,'+').replace(/_/g,'/');
-  while(s.length%4)s+='=';
-  const bin=atob(s);
-  const bytes=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-  return bytes;
-}
-
-async function encodeShare(obj){
-  const raw=new TextEncoder().encode(JSON.stringify(obj));
-
-  if('CompressionStream' in window){
-    try{
-      const cs=new CompressionStream('deflate-raw');
-      const compressed=new Uint8Array(
-        await new Response(new Blob([raw]).stream().pipeThrough(cs)).arrayBuffer()
-      );
-      return 'd'+bytesToBase64Url(compressed);
-    }catch(e){}
-  }
-
-  return 'j'+bytesToBase64Url(raw);
-}
-
-async function decodeShare(str){
-  try{
-    const type=str.charAt(0);
-    const bytes=base64UrlToBytes(str.slice(1));
-
-    if(type==='d' && 'DecompressionStream' in window){
-      const ds=new DecompressionStream('deflate-raw');
-      const raw=new Uint8Array(
-        await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer()
-      );
-      return JSON.parse(new TextDecoder().decode(raw));
-    }
-
-    if(type==='j'){
-      return JSON.parse(new TextDecoder().decode(bytes));
-    }
-  }catch(e){
-    console.error('共有結果の復元に失敗',e);
-  }
-  return null;
-}
-
-function getShareHash(){
-  const h=location.hash||'';
-  if(!h.startsWith('#share='))return '';
-  return decodeURIComponent(h.slice(7));
-}
-
-async function restoreSharedResult(){
-  const encoded=getShareHash();
-  if(!encoded)return false;
-
-  const data=await decodeShare(encoded);
-  if(!data || !Array.isArray(data.hits))return false;
-
-  hits=data.hits.map(r=>({
-    id:r.id||'',
-    photo:Number(r.photo||0),
-    name:r.name||'',
-    room:r.room||'',
-    agent:r.agent||'',
-    address:r.address||'',
-    adkey:r.adkey||'',
-    dateText:r.dateText||''
-  }));
-
-  sortByAddress(false);
-
-  drop.style.display='none';
-  fileEl.disabled=true;
-  shareBtn.textContent='共有結果を表示中';
-
-  status(
-    `共有結果を読み込みました\n`+
-    `抽出：${hits.length.toLocaleString()}件\n`+
-    `基準：${data.cutoff||getCutoff().label}\n`+
-    `この画面はPDFなしで共有結果を表示しています。`
-  );
-
-  return true;
-}
-
-
-function shortenWithIsGd(longUrl){
-  return new Promise((resolve)=>{
-    const cb='mioShort_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+function jsonpGet(id){
+  return new Promise((resolve,reject)=>{
+    const cb='mioCallback_'+Date.now()+'_'+Math.random().toString(36).slice(2);
     const script=document.createElement('script');
-    const timer=setTimeout(()=>{
-      cleanup();
-      resolve(null);
-    },10000);
-
-    function cleanup(){
-      clearTimeout(timer);
-      delete window[cb];
-      script.remove();
-    }
-
-    window[cb]=(data)=>{
-      const short=data && data.shorturl;
-      cleanup();
-      resolve(short && /^https:\/\/is\.gd\//.test(short) ? short : null);
-    };
-
-    script.onerror=()=>{
-      cleanup();
-      resolve(null);
-    };
-
-    script.src='https://is.gd/create.php?format=json&callback='+
-      encodeURIComponent(cb)+'&url='+encodeURIComponent(longUrl);
-
+    const timer=setTimeout(()=>{cleanup();reject(new Error('共有結果の取得がタイムアウトしました。'));},15000);
+    function cleanup(){clearTimeout(timer);try{delete window[cb]}catch(e){window[cb]=undefined}script.remove();}
+    window[cb]=(res)=>{cleanup();resolve(res)};
+    script.onerror=()=>{cleanup();reject(new Error('共有結果を取得できませんでした。'))};
+    script.src=GAS_URL+'?id='+encodeURIComponent(id)+'&callback='+encodeURIComponent(cb);
     document.head.appendChild(script);
   });
 }
 
-shareBtn.addEventListener('click',async()=>{
-  if(!hits.length){
-    status('共有する結果がありません。先にPDFを読み込んでください。');
-    return;
-  }
+function getShareId(){return new URLSearchParams(location.search).get('share')||'';}
 
+async function restoreSharedResult(){
+  const id=getShareId();
+  if(!id)return false;
+  status('共有結果を読み込み中…');
   try{
-    const encoded=await encodeShare(shareData());
+    const res=await jsonpGet(id);
+    if(!res||!res.ok||!res.data||!Array.isArray(res.data.hits)){status('共有結果が見つかりませんでした。共有URLが正しいか確認してください。');return true;}
+    const data=res.data;
+    hits=data.hits.map(r=>({id:r.id||'',photo:Number(r.photo||0),name:r.name||'',room:r.room||'',agent:r.agent||'',address:r.address||'',adkey:r.adkey||'',dateText:r.dateText||''}));
+    sortByAddress(false);
+    drop.style.display='none';
+    fileEl.disabled=true;
+    shareBtn.textContent='共有結果を表示中';
+    status(`共有結果を読み込みました\n抽出：${hits.length.toLocaleString()}件\n基準：${data.cutoff||getCutoff().label}\nこの画面はPDFなしで共有結果を表示しています。`);
+    return true;
+  }catch(e){console.error(e);status('共有結果の読み込みに失敗しました。');return true;}
+}
 
-    // 現在のGitHub Pages URLをそのまま土台にする。
-    // 例：https://xxxxx.github.io/repo/
-    //        ↓
-    // https://xxxxx.github.io/repo/#share=xxxxx
+shareBtn.addEventListener('click',async()=>{
+  if(!hits.length){status('共有する結果がありません。先にPDFを読み込んでください。');return;}
+  shareBtn.disabled=true;
+  const oldText=shareBtn.textContent;
+  shareBtn.textContent='共有URL作成中…';
+  try{
+    const id=makeShareId();
+    await saveToGAS(id,shareData());
     const url=new URL(window.location.href);
-    url.hash='share='+encodeURIComponent(encoded);
-
-    const longShareUrl=url.toString();
-
-    // is.gd のJSONP APIを使って短縮。
-    // fetch/CORSに依存せず、LINEで扱いやすい短いURLを作る。
-    const shortUrl=await shortenWithIsGd(longShareUrl);
-
-    if(shortUrl){
-      const ok=await copyText(shortUrl);
-      if(ok){
-        shareBtn.textContent='短縮URLをコピーしました';
-        status(
-          `短縮URLをコピーしました\n`+
-          `このURLをLINE等で送れば、PDFなしで同じ結果を表示できます。`
-        );
-        setTimeout(()=>shareBtn.textContent='結果を共有',1800);
-      }else{
-        window.prompt('この短縮URLをコピーしてください',shortUrl);
-      }
-    }else{
-      // 短縮サービスが利用できない場合は元URLをコピー。
-      const ok=await copyText(longShareUrl);
-      if(ok){
-        shareBtn.textContent='長いURLをコピーしました';
-        status(
-          `URL短縮サービスに接続できなかったため、元の共有URLをコピーしました。\\n`+
-          `LINEで開けない場合はもう一度お試しください。`
-        );
-        setTimeout(()=>shareBtn.textContent='結果を共有',1800);
-      }else{
-        window.prompt('このURLをコピーしてください',longShareUrl);
-      }
-    }
-  }catch(e){
-    console.error(e);
-    status('共有URLの作成に失敗しました。');
-  }
+    url.search='';
+    url.hash='';
+    url.searchParams.set('share',id);
+    const shareUrl=url.toString();
+    const ok=await copyText(shareUrl);
+    if(ok){
+      shareBtn.textContent='URLをコピーしました';
+      status(`共有URLをコピーしました\n共有ID：${id}\nこのURLをLINE等で送れば、PDFなしで同じ結果を表示できます。`);
+    }else{window.prompt('このURLをコピーしてください',shareUrl);shareBtn.textContent=oldText;}
+  }catch(e){console.error(e);shareBtn.textContent=oldText;status('共有URLの作成に失敗しました。Apps Scriptの公開設定を確認してください。');}
+  finally{shareBtn.disabled=false;if(shareBtn.textContent==='URLをコピーしました')setTimeout(()=>shareBtn.textContent=oldText,1800);}
 });
-
 
 fileEl.addEventListener('change',()=>readFiles(fileEl.files));
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
